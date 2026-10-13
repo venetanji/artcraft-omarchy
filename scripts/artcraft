@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+  --help|-h)
+    cat <<'HELP'
+Artcraft Linux launcher
+
+Usage: artcraft [application arguments]
+       artcraft --diagnose
+
+ARTCRAFT_BINARY overrides the executable path for source builds.
+WEBKIT_DISABLE_DMABUF_RENDERER defaults to 1 for Wayland compatibility.
+Set WEBKIT_DISABLE_DMABUF_RENDERER=0 to use the default WebKit renderer.
+HELP
+    exit 0
+    ;;
+  --diagnose)
+    printf 'Session: %s\nWayland display: %s\nX11 display: %s\n' \
+      "${XDG_SESSION_TYPE:-unset}" "${WAYLAND_DISPLAY:-unset}" "${DISPLAY:-unset}"
+    pacman -Q gtk3 webkit2gtk-4.1 libsoup3 openssl
+    exit 0
+    ;;
+esac
+
+binary="${ARTCRAFT_BINARY:-/usr/lib/artcraft/artcraft}"
+if [[ ! -x "$binary" ]]; then
+  printf 'Artcraft executable not found: %s\n' "$binary" >&2
+  exit 127
+fi
+
+export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+exec "$binary" "$@"
+

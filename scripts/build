@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+build_root="${ARTCRAFT_BUILD_ROOT:-$repo_root/.build}"
+source_root="$build_root/artcraft"
+upstream_ref=d4e4ac69bbd93d237eaf5d0260bc6a5ff3a5e373
+tauri_version=2.12.2
+
+export PATH="$HOME/.cargo/bin:$PATH"
+for command in cargo rustc node npm git pkg-config; do
+  command -v "$command" >/dev/null || {
+    printf 'Missing build command: %s\n' "$command" >&2
+    exit 1
+  }
+done
+pkg-config --exists gtk+-3.0 webkit2gtk-4.1 libsoup-3.0
+
+mkdir -p "$build_root"
+if [[ ! -d "$source_root" ]]; then
+  git clone --depth 1 https://github.com/storytold/artcraft.git "$source_root"
+  git -C "$source_root" fetch --depth 1 origin "$upstream_ref"
+  git -C "$source_root" switch --detach FETCH_HEAD
+fi
+if [[ $(git -C "$source_root" rev-parse HEAD) != "$upstream_ref" ]]; then
+  printf 'Build checkout does not match pinned revision %s\n' "$upstream_ref" >&2
+  exit 1
+fi
+
+if [[ ! -x "$build_root/tauri-cli/node_modules/.bin/tauri" ]]; then
+  npm install --prefix "$build_root/tauri-cli" --no-audit --no-fund \
+    --save-exact "@tauri-apps/cli@$tauri_version"
+fi
+if [[ ! -x "$source_root/frontend/node_modules/.bin/vite" || ${ARTCRAFT_FORCE_INSTALL:-0} == 1 ]]; then
+  (cd "$source_root/frontend" && npm ci --no-audit --no-fund)
+fi
+
+export VITE_ENVIRONMENT_TYPE=production
+export SQLX_OFFLINE=true
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
+
+(cd "$source_root/frontend/apps/artcraft" && ../../node_modules/.bin/vite build --emptyOutDir)
+(cd "$source_root/crates/desktop/artcraft" && \
+  "$build_root/tauri-cli/node_modules/.bin/tauri" build --no-bundle \
+    --config '{"build":{"beforeBuildCommand":""}}' -- --locked)
+
+printf '\nExecutable: %s/target/release/artcraft\n' "$source_root"

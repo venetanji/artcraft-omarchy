@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+export ARTCRAFT_BINARY="${ARTCRAFT_BINARY:-${ARTCRAFT_BUILD_ROOT:-$repo_root/.build}/artcraft/target/release/artcraft}"
+exec "$repo_root/scripts/artcraft" "$@"
